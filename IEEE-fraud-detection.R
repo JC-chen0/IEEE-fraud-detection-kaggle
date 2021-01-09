@@ -6,6 +6,7 @@ library(dplyr)
 install.packages('ggpubr')
 library('ggpubr')
 library('skimr')
+library(DMwR)
 ##############################
 
 ##### Loading Data
@@ -51,6 +52,9 @@ test['id-24'] <- NULL
 test['id-25'] <- NULL
 test['id-26'] <- NULL
 
+
+train_revised <- knnImputation(full_data)
+
 #detect missing value
 missing_trans <- colSums(is.na(train))[colSums(is.na(train)) > 0] %>%
   sort(decreasing = TRUE)
@@ -66,7 +70,7 @@ print(paste('The testing data has ' ,length(missing_test) ,'columns out of' , nc
 
 #View the target variable 
 ggplot(train, aes(factor(isFraud), fill = factor(isFraud))) + geom_bar(alpha = 0.8)  + theme_minimal() +
-  ggtitle("Target variable") + labs(x = "isFraud")
+  ggtitle("Target variable") + labs(x = "isFraud") + geom_text(data= train,aes(x = isFraud, label = , y= count(isFraud)),size = 8)
 #Extremely imbalanced, 
 
 #View TransactionDT
