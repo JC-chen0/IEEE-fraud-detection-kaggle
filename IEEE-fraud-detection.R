@@ -3,13 +3,17 @@ install.packages('tidyverse')
 library('tidyverse')
 library('ggplot2')
 library(dplyr)
-install.packages('ggpubr')
-library('ggpubr')
 library('skimr')
-library(DMwR)
-##############################
 
+# ##### Using python
+# install.packages('reticulate')
+# library('reticulate')
+# np <- import('numpy')
+# pd <- import("pandas")
+
+##############################
 ##### Loading Data
+
 #Using read_csv faster rather than read.csv when large data 
 train_trans <- read_csv('data/train_transaction.csv')
 train_id <- read_csv('data/train_identity.csv')
@@ -20,65 +24,74 @@ test_id <- read_csv('data/test_identity.csv')
 memory.limit(250000) 
 #####
 
-#full data
+#load data
 train <- left_join(train_trans,train_id)
 test <- left_join(test_trans,test_id)
-
-#for heavy loading memory using
 rm(train_id, train_trans,test_id,test_trans); invisible(gc())
 
-glimpse(train)
-#lots of NaN and some columns we dont understand
+test$isFraud <- NA
 
+#lots of NaN and some columns we dont understand
 skim_to_list(train) 
 skim_to_list(test)
 #The features with over 70% missing value in Train are concentrated in D, V, and id columns
 
-#remove the column with 0.99% missing value rate
-train$id_07 <- NULL
-train$id_08 <- NULL
-train$id_21 <- NULL
-train$id_22 <- NULL
-train$id_23 <- NULL
-train$id_24 <- NULL
-train$id_25 <- NULL
-train$id_26 <- NULL
-test['id-07'] <- NULL
-test['id-08'] <- NULL
-test['id-21'] <- NULL
-test['id-22'] <- NULL
-test['id-23']<- NULL
-test['id-24'] <- NULL
-test['id-25'] <- NULL
-test['id-26'] <- NULL
+train_missing_percent=(colSums(is.na(train))/nrow(train))*100
+train_miss_Percent_DF=data.frame(colnames(train),train_missing_percent)
+colnames(train_miss_Percent_DF)<-c("Variable","MissPercentage")
+train_miss_Percent_DF=train_miss_Percent_DF[order(train_miss_Percent_DF$MissPercentage,decreasing = TRUE), ]
+plot(train_miss_Percent_DF$MissPercentage, ylab = "% Missing", main = "Percentage of Missing data")
+
+over_99_miss_percentage_col <- c("id_24","id_25","id_07","id_08","id_21","id_26","id_22","id_23","id_27") 
+for(i in over_99_miss_percentage_col){
+  train[,i] = NULL
+}
+
+test_missing_percent=(colSums(is.na(test))/nrow(test))*100
+test_miss_Percent_DF=data.frame(colnames(test),test_missing_percent)
+colnames(test_miss_Percent_DF)<-c("Variable","MissPercentage")
+test_miss_Percent_DF=test_miss_Percent_DF[order(test_miss_Percent_DF$MissPercentage,decreasing = TRUE), ]
+plot(test_miss_Percent_DF$MissPercentage, ylab = "% Missing", main = "Percentage of Missing data")
+train_over_99_miss_percentage_col <- c("id-24","id-25","id-07","id-08","id-21","id-26","id-22","id-23","id-27") 
+for(i in train_over_99_miss_percentage_col){
+  test[,i] = NULL
+}
+
+write.csv(train,'train.csv')
 
 
-train_revised <- knnImputation(full_data)
+category_cols <- c('ProductCD', 'card1', 'card2', 'card3', 'card4', 'card5', 'card6',
+                   'addr1', 'addr2', 'P_emaildomain', 'R_emaildomain', 'DeviceType', 'DeviceInfo',
+                   'M1','M2','M3','M4','M5','M6','M7','M8','M9',"id_12",
+                   "id_13","id_14","id_15","id_16","id_17","id_19","id_20",
+                   "id_28","id_29","id_30","id_31","id_32","id_33",
+                   "id_34","id_35","id_36","id_37","id_38")
+column_names <- colnames(train)
+num_cols = setdiff(column_names,category_cols)
+train_without_category_cols <- train[num_cols]
+
+missing_trans_without_category_cols <- colSums(is.na(train_without_category_cols))[colSums(is.na(train_without_category_cols)) > 0] %>%
+  sort(decreasing = TRUE)
+
+source_python('medianImputation.py')
+train <- naImputation(train)
+#missingImputation <- knnImputation(data = train[num_cols],k=2)
+#Not sufficient complete cases for computing neighbors.
+
 
 #detect missing value
-missing_trans <- colSums(is.na(train))[colSums(is.na(train)) > 0] %>%
-  sort(decreasing = TRUE)
+
+#Filling NA value for category variables
+train_category_cols <- train[category_cols] 
+
+train_category_cols[is.na(train_category_cols)] <- "missing"
+
 missing_test <- colSums(is.na(test))[colSums(is.na(test)) > 0] %>%
   sort(decreasing = TRUE)
 
 
 print(paste('The training data has ' ,length(missing_trans) ,'columns out of' , ncol(train), 'having missing values' ))
 print(paste('The testing data has ' ,length(missing_test) ,'columns out of' , ncol(test), 'having missing values' ))
-
-
-#EDA
-
-#View the target variable 
-ggplot(train, aes(factor(isFraud), fill = factor(isFraud))) + geom_bar(alpha = 0.8)  + theme_minimal() +
-  ggtitle("Target variable") + labs(x = "isFraud") + geom_text(data= train,aes(x = isFraud, label = , y= count(isFraud)),size = 8)
-#Extremely imbalanced, 
-
-#View TransactionDT
-ggplot(train, aes(TransactionDT, fill = factor(isFraud))) + geom_histogram(alpha = 0.7, bins = 30)  + theme_minimal() +
-  ggtitle("Train TransactionDT variable") + labs(x = "TransactionDT") + theme(legend.position = "bottom")
-
-ggplot(test, aes(TransactionDT)) + geom_histogram(alpha = 0.7, bins = 30)  + theme_minimal() +
-  ggtitle("Test TransactionDT variable") + labs(x = "TransactionDT")
 
 
 
